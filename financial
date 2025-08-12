@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>10‑Year Investment Game</title>
+<style>
+  :root {
+    --bg: #0f1221;
+    --panel: #171a2b;
+    --panel-2: #1f2340;
+    --text: #e7e9ee;
+    --muted: #b9bed1;
+    --accent: #7c9cff;
+    --accent-2: #6ce0c3;
+    --danger: #ff7685;
+    --warning: #ffd36c;
+    --good: #88f087;
+    --line: #2d3155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+    background: radial-gradient(1200px 800px at 80% -20%, #2a2f57 0%, var(--bg) 40%) fixed;
+    color: var(--text);
+    line-height: 1.45;
+    font-size: 14px; /* ↓ reduced from default */
+  }
+  input, button, select, textarea {
+    font-size: 13px; /* smaller text inside inputs/buttons */
+  }
+  header { padding: 24px 16px 8px; text-align: center; }
+  header h1 { margin: 0 0 6px; font-size: clamp(20px, 3vw, 32px); letter-spacing:.2px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .container {
+    max-width: 1500px; /* wider container */
+    margin: 18px auto 80px;
+    padding: 0 12px;
+    display: grid;
+    grid-template-columns: 1.05fr 1.3fr 1.05fr; /* widen each frame */
+    gap: 12px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .container { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+  }
+  .card h2 { margin: 6px 6px 10px; font-size: 15px; letter-spacing:.2px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .field { margin: 4px; }
+  label { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
+  input[type="number"], input[type="text"] {
+    width: 100%; background:#0f1221; color:var(--text);
+    border: 1px solid #343a66; border-radius: 8px; padding: 8px 10px; outline: none;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .pill {
+    display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:999px;
+    background:#121631; color:var(--text); border:1px solid #2b2f57; cursor:pointer; user-select:none;
+    font-size: 12px;
+  }
+  .pill:hover { border-color:#3b4070; }
+  .btn {
+    background: linear-gradient(180deg, #4a66ff, #2f48d9);
+    border: none; color: white; padding: 10px 14px; border-radius: 10px;
+    font-weight: 600; cursor: pointer; box-shadow: 0 6px 18px rgba(76,99,255,.35);
+    font-size: 13px;
+  }
+  .btn:disabled { opacity:.55; cursor:not-allowed; box-shadow:none; }
+  .btn.secondary { background:#192044; border:1px solid #3a4080; box-shadow:none; }
+  .btn.danger {
+    background: linear-gradient(180deg, #ff6b7a, #da3f51);
+    box-shadow: 0 6px 18px rgba(255,107,122,.35);
+  }
+  .hint { color: var(--muted); font-size: 11px; }
+  .kpi .big { font-size: 15px; font-weight: 700; }
+  table { font-size: 13px; }
+</style>
+  
+</head>
+<body>
+  <header>
+    <h1>10‑Year Investment Game</h1>
+    <p>Pick your allocation, set assumptions, and lock in each year. Annual contribution is fixed for the whole run.</p>
+  </header>
+
+  <div class="container">
+    <!-- LEFT: Inputs -->
+    <section class="card" id="left">
+      <h2>Inputs</h2>
+      <div class="row">
+        <div class="field">
+          <label for="startBalance">Starting Balance</label>
+          <input id="startBalance" type="number" value="10000" min="0" step="100" />
+          <div class="hint">Used only at the start.</div>
+        </div>
+        <div class="field">
+          <label for="annualContribution">Annual Contribution</label>
+          <input id="annualContribution" type="number" value="5000" min="0" step="100" />
+          <div class="hint">Same amount added at the start of each year.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="seed">Random Seed (optional)</label>
+          <input id="seed" type="text" placeholder="e.g., my-seed" />
+          <div class="hint">Set before Year 1 to replay scenarios.</div>
+        </div>
+        <div class="field" style="display:flex; gap:8px; align-items:flex-end; justify-content:flex-end;">
+          <button id="resetBtn" class="btn danger">⟲ New Game</button>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+      <h2>Allocation</h2>
+      <div class="preset-wrap">
+        <button class="pill" data-preset="cautious">🛡️ Cautious 70/25/5</button>
+        <button class="pill" data-preset="balanced">⚖️ Balanced 40/50/10</button>
+        <button class="pill" data-preset="growth">🚀 Growth 10/60/30</button>
+        <button class="pill" data-preset="allEquity">📈 0/20/80</button>
+        <button class="pill" data-preset="allFixed">💵 0/90/10</button>
+        <button class="pill" data-preset="allCash">🏦 100/0/0</button>
+      </div>
+
+      <div class="alloc-row">
+        <div>Cash</div>
+        <input id="allocCash" type="range" min="0" max="100" value="20" />
+        <div><span id="pctCash">20</span>%</div>
+      </div>
+      <div class="alloc-row">
+        <div>Fixed Inc.</div>
+        <input id="allocFixed" type="range" min="0" max="100" value="50" />
+        <div><span id="pctFixed">50</span>%</div>
+      </div>
+      <div class="alloc-row">
+        <div>Equity</div>
+        <input id="allocEquity" type="range" min="0" max="100" value="30" />
+        <div><span id="pctEquity">30</span>%</div>
+      </div>
+
+      <div class="preset-wrap" style="margin-top:2px">
+        <span class="hint">Allocations must sum to 100%. Use “Normalize” to auto-fix.</span>
+        <button class="pill" id="normalizeBtn">🧮 Normalize</button>
+        <button class="pill" id="rebalanceBtn">🔁 Rebalance to Last Year</button>
+      </div>
+
+      <div class="sep"></div>
+      <h2>Market Assumptions</h2>
+      <div class="row3">
+        <div class="field">
+          <label>Cash Return %</label>
+          <input id="muCash" type="number" value="2" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Fixed Income Return %</label>
+          <input id="muFixed" type="number" value="4" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Equity Return %</label>
+          <input id="muEquity" type="number" value="8" step="0.1" />
+        </div>
+      </div>
+      <div class="row3">
+        <div class="field">
+          <label>Cash Vol %</label>
+          <input id="sdCash" type="number" value="1" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Fixed Income Vol %</label>
+          <input id="sdFixed" type="number" value="5" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Equity Vol %</label>
+          <input id="sdEquity" type="number" value="15" step="0.1" />
+        </div>
+      </div>
+      <div class="field" style="display:flex; gap:8px; justify-content:flex-end">
+        <button id="applyAssumpBtn" class="btn secondary">📐 Apply Assumptions</button>
+      </div>
+
+      <div class="sep"></div>
+      <h2>Progress</h2>
+      <div class="kpi">
+        <div class="box">
+          <div class="hint">Year</div>
+          <div class="big" id="yearDisplay">1 / 10</div>
+        </div>
+        <div class="box">
+          <div class="hint">Portfolio Value</div>
+          <div class="big" id="kpiValue">$10,000</div>
+        </div>
+        <div class="box">
+          <div class="hint">Total Contrib.</div>
+          <div class="big" id="kpiContrib">$0</div>
+        </div>
+        <div class="box">
+          <div class="hint">This Year Return</div>
+          <div class="big" id="kpiYearRet">—</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <button id="commitBtn" class="btn">Lock In Year ➜</button>
+        </div>
+        <div class="field" style="display:flex; gap:8px; justify-content:flex-end">
+          <button id="undoBtn" class="btn secondary">↩ Undo Year</button>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        <strong>Model:</strong> Annual returns are normally distributed per your assumptions.
+        Contribution is added at the start of each year, then returns are applied to the whole portfolio (rebalanced).
+      </div>
+    </section>
+
+    <!-- MIDDLE: Table -->
+    <section class="card" id="middle">
+      <h2>Yearly Log</h2>
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th class="label">Year</th>
+            <th>Contribution</th>
+            <th>Cash%/Fixed%/Equity%</th>
+            <th>Market: C/F/E</th>
+            <th>Weighted Return</th>
+            <th>End Balance</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- RIGHT: Chart + Final -->
+    <section class="card" id="right">
+      <h2>Portfolio Over Time</h2>
+      <canvas id="chart" width="900" height="260" aria-label="Portfolio value chart"></canvas>
+
+      <h2 style="margin-top:16px">Final Summary (after Year 10)</h2>
+      <div class="kpi">
+        <div class="box">
+          <div class="hint">Final Value</div>
+          <div class="big" id="finalValue">—</div>
+        </div>
+        <div class="box">
+          <div class="hint">Net Gain</div>
+          <div class="big" id="finalGain">—</div>
+        </div>
+        <div class="box">
+          <div class="hint">Total Return</div>
+          <div class="big" id="finalTR">—</div>
+        </div>
+        <div class="box">
+          <div class="hint">10‑yr CAGR</div>
+          <div class="big" id="finalCAGR">—</div>
+        </div>
+      </div>
+      <div class="footer-note" id="finalNotes"></div>
+    </section>
+  </div>
+
+<script>
+/* ---------- Utilities ---------- */
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+function hashStringToInt(str) {
+  let h = 2166136261 >>> 0;
+  for (let i=0; i<str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function makeNormal(rng) {
+  let spare = null;
+  return function(mean=0, sd=1) {
+    if (spare !== null) { const z = spare; spare = null; return mean + sd * z; }
+    let u=0, v=0, s=0;
+    do { u = rng()*2-1; v = rng()*2-1; s = u*u + v*v; } while (s===0 || s>=1);
+    const mul = Math.sqrt(-2 * Math.log(s) / s);
+    spare = v * mul;
+    return mean + sd * (u * mul);
+  }
+}
+const fmt = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const pct = (x) => (x>=0?'+':'') + (x*100).toFixed(2) + '%';
+
+/* ---------- State ---------- */
+let state = {
+  year: 1,
+  startBalance: 10000,
+  value: 10000,
+  contribAnnual: 5000,
+  contribTotal: 0,
+  history: [],
+  seedStr: '',
+  rng: Math.random,
+  normal: null,
+  lastAlloc: { cash:20, fixed:50, equity:30 },
+  params: {
+    cash: { mean: 0.02, sd: 0.01 },
+    fixed: { mean: 0.04, sd: 0.05 },
+    equity: { mean: 0.08, sd: 0.15 },
+  }
+};
+
+/* ---------- DOM ---------- */
+const dom = {
+  // Inputs
+  startBalance: document.getElementById('startBalance'),
+  annualContribution: document.getElementById('annualContribution'),
+  seed: document.getElementById('seed'),
+
+  // Allocation
+  allocCash: document.getElementById('allocCash'),
+  allocFixed: document.getElementById('allocFixed'),
+  allocEquity: document.getElementById('allocEquity'),
+  pctCash: document.getElementById('pctCash'),
+  pctFixed: document.getElementById('pctFixed'),
+  pctEquity: document.getElementById('pctEquity'),
+  normalizeBtn: document.getElementById('normalizeBtn'),
+  rebalanceBtn: document.getElementById('rebalanceBtn'),
+
+  // Assumptions
+  muCash: document.getElementById('muCash'),
+  muFixed: document.getElementById('muFixed'),
+  muEquity: document.getElementById('muEquity'),
+  sdCash: document.getElementById('sdCash'),
+  sdFixed: document.getElementById('sdFixed'),
+  sdEquity: document.getElementById('sdEquity'),
+  applyAssumpBtn: document.getElementById('applyAssumpBtn'),
+
+  // Actions
+  commitBtn: document.getElementById('commitBtn'),
+  undoBtn: document.getElementById('undoBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+
+  // KPIs / Table / Chart / Final
+  yearDisplay: document.getElementById('yearDisplay'),
+  kpiValue: document.getElementById('kpiValue'),
+  kpiContrib: document.getElementById('kpiContrib'),
+  kpiYearRet: document.getElementById('kpiYearRet'),
+  logTable: document.getElementById('logTable').querySelector('tbody'),
+  chart: document.getElementById('chart'),
+  finalValue: document.getElementById('finalValue'),
+  finalGain: document.getElementById('finalGain'),
+  finalTR: document.getElementById('finalTR'),
+  finalCAGR: document.getElementById('finalCAGR'),
+  finalNotes: document.getElementById('finalNotes'),
+};
+
+/* ---------- Init & Helpers ---------- */
+function readAssumptionsIntoState() {
+  // Convert % inputs to decimals
+  const toDec = (x) => (Number(x)||0)/100;
+  state.params.cash.mean = toDec(dom.muCash.value);
+  state.params.fixed.mean = toDec(dom.muFixed.value);
+  state.params.equity.mean = toDec(dom.muEquity.value);
+  state.params.cash.sd = toDec(dom.sdCash.value);
+  state.params.fixed.sd = toDec(dom.sdFixed.value);
+  state.params.equity.sd = toDec(dom.sdEquity.value);
+}
+function currentAlloc() {
+  return {
+    cash: Number(dom.allocCash.value),
+    fixed: Number(dom.allocFixed.value),
+    equity: Number(dom.allocEquity.value),
+  };
+}
+function setAlloc(a) {
+  dom.allocCash.value = a.cash;
+  dom.allocFixed.value = a.fixed;
+  dom.allocEquity.value = a.equity;
+  updateAllocLabels();
+}
+function updateAllocLabels() {
+  dom.pctCash.textContent = Number(dom.allocCash.value);
+  dom.pctFixed.textContent = Number(dom.allocFixed.value);
+  dom.pctEquity.textContent = Number(dom.allocEquity.value);
+}
+function normalizeAlloc() {
+  let a = currentAlloc();
+  let sum = a.cash + a.fixed + a.equity;
+  if (sum === 0) { a = { cash: 100, fixed: 0, equity: 0 }; }
+  else {
+    a.cash = Math.round(100 * a.cash / sum);
+    a.fixed = Math.round(100 * a.fixed / sum);
+    a.equity = 100 - a.cash - a.fixed;
+  }
+  setAlloc(a);
+}
+function fmtAlloc(a){ return `${a.cash}% / ${a.fixed}% / ${a.equity}%`; }
+function computeCAGR(start, end, years){
+  if (years <= 0 || start <= 0) return null;
+  return Math.pow(end / start, 1/years) - 1;
+}
+function setEditLocks() {
+  // Lock starting fields after first year has begun
+  const lock = state.history.length > 0;
+  dom.startBalance.disabled = lock;
+  dom.seed.disabled = lock;
+  dom.annualContribution.disabled = lock;
+  dom.muCash.disabled = lock; dom.muFixed.disabled = lock; dom.muEquity.disabled = lock;
+  dom.sdCash.disabled = lock; dom.sdFixed.disabled = lock; dom.sdEquity.disabled = lock;
+  dom.applyAssumpBtn.disabled = lock;
+}
+
+/* Fix for “New Game” -> Lock In not working: ensure buttons are re-enabled */
+function enableControls() {
+  dom.commitBtn.disabled = false;
+  dom.rebalanceBtn.disabled = false;
+  dom.normalizeBtn.disabled = false;
+}
+
+/* ---------- Core ---------- */
+function init() {
+  // Seed / RNG
+  state.seedStr = (dom.seed.value.trim() ? dom.seed.value.trim() : 'seed-' + Date.now());
+  state.rng = mulberry32(hashStringToInt(state.seedStr));
+  state.normal = makeNormal(state.rng);
+
+  // Read inputs
+  let sb = Math.max(0, Math.round(Number(dom.startBalance.value)||0));
+  let ac = Math.max(0, Math.round(Number(dom.annualContribution.value)||0));
+  state.startBalance = state.value = sb;
+  state.contribAnnual = ac;
+
+  // Assumptions
+  readAssumptionsIntoState();
+
+  // Reset progression
+  state.year = 1;
+  state.contribTotal = 0;
+  state.history = [];
+  state.lastAlloc = currentAlloc();
+
+  // UI
+  dom.yearDisplay.textContent = '1 / 10';
+  dom.kpiValue.textContent = fmt.format(state.value);
+  dom.kpiContrib.textContent = fmt.format(0);
+  dom.kpiYearRet.textContent = '—';
+  dom.logTable.innerHTML = '';
+  clearFinal();
+  drawChart();
+  enableControls();
+  setEditLocks(); // will keep inputs editable at start
+}
+function clearFinal() {
+  dom.finalValue.textContent = '—';
+  dom.finalGain.textContent = '—';
+  dom.finalTR.textContent = '—';
+  dom.finalCAGR.textContent = '—';
+  dom.finalNotes.textContent = '';
+}
+
+function drawYear() {
+  // Validate allocation
+  let alloc = currentAlloc();
+  const sum = alloc.cash + alloc.fixed + alloc.equity;
+  if (sum !== 100) {
+    alert('Allocations must sum to 100%. Click “Normalize” or adjust sliders.');
+    return;
+  }
+  // Lock invariant inputs after first commit
+  if (state.history.length === 0) { setEditLocks(); }
+
+  // Annual contribution (fixed)
+  const contrib = state.contribAnnual;
+
+  // Generate market returns
+  const rCash = state.normal(state.params.cash.mean, state.params.cash.sd);
+  const rFixed = state.normal(state.params.fixed.mean, state.params.fixed.sd);
+  const rEquity = state.normal(state.params.equity.mean, state.params.equity.sd);
+
+  // Weighted return
+  const w = { cash: alloc.cash/100, fixed: alloc.fixed/100, equity: alloc.equity/100 };
+  const weighted = rCash*w.cash + rFixed*w.fixed + rEquity*w.equity;
+
+  // Apply contribution then return
+  const before = state.value + contrib;
+  const after = Math.max(0, before * (1 + weighted));
+
+  // Update state
+  state.contribTotal += contrib;
+  state.value = Math.round(after);
+  state.history.push({
+    year: state.year,
+    contribution: contrib,
+    alloc: { ...alloc },
+    market: { cash: rCash, fixed: rFixed, equity: rEquity },
+    weightedRet: weighted,
+    endBalance: state.value
+  });
+  state.lastAlloc = { ...alloc };
+
+  // Update UI
+  addRow(state.history[state.history.length-1]);
+  dom.kpiValue.textContent = fmt.format(state.value);
+  dom.kpiContrib.textContent = fmt.format(state.contribTotal);
+  dom.kpiYearRet.textContent = (weighted >= 0 ? '📈 ' : '📉 ') + pct(weighted);
+
+  drawChart();
+
+  // Next year
+  state.year++;
+  dom.yearDisplay.textContent = `${Math.min(10, state.year)} / 10`;
+
+  if (state.history.length >= 10) finalize();
+}
+function addRow(entry) {
+  const tr = document.createElement('tr');
+  const mkt = `${pct(entry.market.cash)} / ${pct(entry.market.fixed)} / ${pct(entry.market.equity)}`;
+  tr.innerHTML = `
+    <td class="label">${entry.year}</td>
+    <td>${fmt.format(entry.contribution)}</td>
+    <td>${fmtAlloc(entry.alloc)}</td>
+    <td>${mkt}</td>
+    <td class="${entry.weightedRet>=0?'good':'bad'}">${pct(entry.weightedRet)}</td>
+    <td>${fmt.format(entry.endBalance)}</td>
+  `;
+  dom.logTable.appendChild(tr);
+}
+function finalize() {
+  dom.commitBtn.disabled = true;
+  dom.rebalanceBtn.disabled = true;
+  dom.normalizeBtn.disabled = true;
+
+  const finalValue = state.value;
+  const invested = state.startBalance + state.contribTotal;
+  const gain = finalValue - invested;
+  const totalReturn = invested > 0 ? (finalValue / invested - 1) : null;
+  const cagrTotal = computeCAGR(invested, finalValue, 10); // proxy
+
+  dom.finalValue.textContent = fmt.format(finalValue);
+  dom.finalGain.textContent = (gain>=0? '📈 ' : '📉 ') + fmt.format(gain);
+  dom.finalTR.textContent = totalReturn===null? '—' : pct(totalReturn);
+  dom.finalCAGR.textContent = cagrTotal===null? '—' : pct(cagrTotal);
+
+  // Notes
+  let best=null, worst=null;
+  state.history.forEach(h => { if(!best||h.weightedRet>best.weightedRet) best=h; if(!worst||h.weightedRet<worst.weightedRet) worst=h; });
+  dom.finalNotes.textContent =
+    `Best year: Y${best.year} (${(best.weightedRet*100).toFixed(2)}%). ` +
+    `Worst year: Y${worst.year} (${(worst.weightedRet*100).toFixed(2)}%). Seed: “${state.seedStr}”.`;
+
+  dom.yearDisplay.textContent = '10 / 10';
+}
+function undoYear() {
+  if (state.history.length === 0) return;
+  const last = state.history.pop();
+  state.year = last.year;
+  state.value = (state.history.length ? state.history[state.history.length-1].endBalance : state.startBalance);
+  state.contribTotal -= last.contribution;
+
+  // Remove last row
+  dom.logTable.removeChild(dom.logTable.lastElementChild);
+
+  // Update KPIs
+  dom.kpiValue.textContent = fmt.format(state.value);
+  dom.kpiContrib.textContent = fmt.format(state.contribTotal);
+  dom.kpiYearRet.textContent = '—';
+  dom.yearDisplay.textContent = `${state.year} / 10`;
+
+  // Re-enable controls if we backed out of year 10
+  enableControls();
+  drawChart();
+  clearFinal();
+
+  // If fully undone to start, unlock editables
+  if (state.history.length === 0) {
+    dom.startBalance.disabled = false;
+    dom.seed.disabled = false;
+    dom.annualContribution.disabled = false;
+    dom.muCash.disabled = false; dom.muFixed.disabled = false; dom.muEquity.disabled = false;
+    dom.sdCash.disabled = false; dom.sdFixed.disabled = false; dom.sdEquity.disabled = false;
+    dom.applyAssumpBtn.disabled = false;
+  }
+}
+
+/* ---------- Chart ---------- */
+function drawChart() {
+  const ctx = dom.chart.getContext('2d');
+  const w = dom.chart.width, h = dom.chart.height;
+  ctx.clearRect(0,0,w,h);
+
+  const values = [state.startBalance, ...state.history.map(h=>h.endBalance)];
+  const years = values.length - 1;
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const padL = 60, padR = 10, padT = 10, padB = 26;
+
+  // Background
+  ctx.fillStyle = '#0b1030'; ctx.fillRect(0,0,w,h);
+  // Grid
+  ctx.strokeStyle = '#202653'; ctx.lineWidth = 1; ctx.beginPath();
+  const gridY = 4;
+  for (let i=0; i<=gridY; i++) { const y = padT + (h-padT-padB)*i/gridY; ctx.moveTo(padL, y); ctx.lineTo(w-padR, y); }
+  ctx.stroke();
+
+  // Y labels
+  ctx.fillStyle = '#9aa2c7'; ctx.font = '12px system-ui, sans-serif';
+  for (let i=0; i<=gridY; i++) {
+    const y = padT + (h-padT-padB)*i/gridY;
+    const val = maxV - (maxV - minV)*i/gridY;
+    ctx.fillText(fmt.format(val), 6, y+4);
+  }
+
+  if (values.length >= 1) {
+    const xStep = (w - padL - padR) / Math.max(1, years);
+    // Shadow
+    ctx.strokeStyle = 'rgba(124,156,255,0.35)'; ctx.lineWidth = 6; ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = padL + xStep*(i===0?0:i-1);
+      const y = padT + (1 - (v - minV)/(maxV - minV || 1)) * (h-padT-padB);
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // Main
+    ctx.strokeStyle = '#7c9cff'; ctx.lineWidth = 3; ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = padL + xStep*(i===0?0:i-1);
+      const y = padT + (1 - (v - minV)/(maxV - minV || 1)) * (h-padT-padB);
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // Dots
+    ctx.fillStyle = '#6ce0c3';
+    values.forEach((v,i)=>{
+      const x = padL + xStep*(i===0?0:i-1);
+      const y = padT + (1 - (v - minV)/(maxV - minV || 1)) * (h-padT-padB);
+      ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+    });
+    // X labels
+    ctx.fillStyle = '#9aa2c7';
+    for (let i=0; i<=10; i++) {
+      const x = padL + (w - padL - padR) * (i/10);
+      const y = h - 8;
+      ctx.fillText('Y'+i, x-8, y);
+    }
+  }
+}
+
+/* ---------- Events ---------- */
+function bind() {
+  // Allocation labels
+  ['allocCash','allocFixed','allocEquity'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', updateAllocLabels);
+  });
+  dom.normalizeBtn.addEventListener('click', normalizeAlloc);
+  dom.rebalanceBtn.addEventListener('click', ()=> setAlloc(state.lastAlloc));
+
+  // Presets
+  document.querySelectorAll('.pill[data-preset]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = btn.getAttribute('data-preset');
+      const presets = {
+        cautious:  {cash:70,fixed:25,equity:5},
+        balanced:  {cash:40,fixed:50,equity:10},
+        growth:    {cash:10,fixed:60,equity:30},
+        allEquity: {cash:0, fixed:20, equity:80},
+        allFixed:  {cash:0, fixed:90, equity:10},
+        allCash:   {cash:100,fixed:0, equity:0},
+      };
+      setAlloc(presets[p]);
+    });
+  });
+
+  // Assumptions
+  dom.applyAssumpBtn.addEventListener('click', readAssumptionsIntoState);
+
+  // Actions
+  dom.commitBtn.addEventListener('click', ()=> {
+    if (state.history.length >= 10) return;
+    drawYear();
+  });
+  dom.undoBtn.addEventListener('click', undoYear);
+  dom.resetBtn.addEventListener('click', init);
+
+  // Start field changes (only effective before year 1)
+  dom.startBalance.addEventListener('change', ()=>{
+    if (state.history.length === 0) {
+      state.startBalance = state.value = Math.max(0, Math.round(Number(dom.startBalance.value)||0));
+      dom.kpiValue.textContent = fmt.format(state.value);
+      drawChart();
+    }
+  });
+  dom.annualContribution.addEventListener('change', ()=>{
+    if (state.history.length === 0) {
+      state.contribAnnual = Math.max(0, Math.round(Number(dom.annualContribution.value)||0));
+    }
+  });
+  dom.seed.addEventListener('change', ()=>{
+    if (state.history.length === 0) init();
+  });
+
+  updateAllocLabels();
+}
+bind();
+init();
+</script>
+</body>
+</html>
