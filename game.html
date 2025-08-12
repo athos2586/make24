@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Make 24 — Solvable Puzzles</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --accent: #38bdf8;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --btn: #2563eb;
+      --btn2: #374151;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 70% -10%, #1e293b 0%, var(--bg) 50%);
+      color: var(--text);
+      min-height: 100vh; display: grid; place-items: center;
+      padding: 20px;
+    }
+    .app {
+      width: min(860px, 100%); background: color-mix(in srgb, var(--panel) 92%, white 8%);
+      border: 1px solid #222;
+      border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      padding: 22px;
+    }
+    header {
+      display: flex; gap: 14px; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      appearance: none; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer;
+      color: white; background: var(--btn); font-weight: 600; letter-spacing: .2px;
+      transition: transform .04s ease, filter .15s ease;
+    }
+    button.secondary { background: var(--btn2); color: var(--text); }
+    button:active { transform: translateY(1px) scale(.99); }
+    button:disabled { filter: grayscale(.5) opacity(.6); cursor: not-allowed; }
+    .wrap { padding: 16px 6px 6px; }
+    .cards {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 8px 0 18px;
+    }
+    .card {
+      background: var(--card); border: 1px solid #2a3646; border-radius: 14px;
+      display: grid; place-items: center; min-height: 90px; font-size: 36px; font-weight: 800;
+      text-shadow: 0 1px 0 rgba(0,0,0,.5);
+    }
+    .meta { display: flex; gap: 18px; align-items: center; color: var(--muted); font-size: 14px; }
+    .target { color: var(--success); font-weight: 700; }
+    .solution {
+      margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: #0b1020; border: 1px solid #1d2540; padding: 12px 14px; border-radius: 10px;
+      color: #dbeafe; display: none; white-space: pre-wrap; word-break: break-word;
+    }
+    .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .range {
+      display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px;
+      background: #0b1020; padding: 6px 10px; border-radius: 10px; border: 1px solid #1d2540;
+    }
+    input[type="number"] {
+      width: 70px; padding: 6px 8px; border-radius: 8px; border: 1px solid #26324a;
+      background: #0b1020; color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Make 24 — Solvable Puzzles</h1>
+      <div class="controls">
+        <button id="newGameBtn">New Game</button>
+        <button id="showAnswerBtn" class="secondary">Answer</button>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div class="row">
+        <div class="meta">
+          <div>Target: <span class="target">24</span></div>
+          <div>Ops: + − × ÷</div>
+        </div>
+        <div class="range">
+          Pool:
+          <label>min <input id="minInput" type="number" value="1" min="1" max="99"></label>
+          <label>max <input id="maxInput" type="number" value="13" min="1" max="99"></label>
+        </div>
+      </div>
+
+      <div class="cards" id="cards"></div>
+
+      <div id="solution" class="solution"></div>
+      <div class="hint">Tip: Click <b>New Game</b> to get another solvable set. Click <b>Answer</b> to reveal one valid expression.</div>
+    </div>
+  </div>
+
+  <script>
+    // --- Rational arithmetic to avoid floating errors ---
+    function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = a % b; a = b; b = t; } return a || 1; }
+    function Rational(n, d = 1) {
+      if (d === 0) throw new Error("Zero denominator");
+      if (d < 0) { n = -n; d = -d; }
+      const g = gcd(n, d);
+      return { n: Math.trunc(n / g), d: Math.trunc(d / g) };
+    }
+    function eq(a, b) { return a.n === b.n && a.d === b.d; }
+    function add(a, b) { return Rational(a.n * b.d + b.n * a.d, a.d * b.d); }
+    function sub(a, b) { return Rational(a.n * b.d - b.n * a.d, a.d * b.d); }
+    function mul(a, b) { return Rational(a.n * b.n, a.d * b.d); }
+    function div(a, b) { if (b.n === 0) return null; return Rational(a.n * b.d, a.d * b.n); }
+    const TWENTY_FOUR = Rational(24, 1);
+
+    // --- Solver: returns one solution string or null ---
+    function solveMake24(nums) {
+      const items = nums.map(n => ({ val: Rational(n), expr: String(n) }));
+
+      function recurse(arr) {
+        if (arr.length === 1) {
+          if (eq(arr[0].val, TWENTY_FOUR)) return arr[0].expr;
+          return null;
+        }
+        for (let i = 0; i < arr.length; i++) {
+          for (let j = i + 1; j < arr.length; j++) {
+            const a = arr[i], b = arr[j];
+            const rest = [];
+            for (let k = 0; k < arr.length; k++) if (k !== i && k !== j) rest.push(arr[k]);
+
+            const candidates = [];
+            candidates.push({ val: add(a.val, b.val), expr: `(${a.expr} + ${b.expr})` });
+            candidates.push({ val: sub(a.val, b.val), expr: `(${a.expr} - ${b.expr})` });
+            candidates.push({ val: sub(b.val, a.val), expr: `(${b.expr} - ${a.expr})` });
+            candidates.push({ val: mul(a.val, b.val), expr: `(${a.expr} * ${b.expr})` });
+            const adivb = div(a.val, b.val); if (adivb) candidates.push({ val: adivb, expr: `(${a.expr} / ${b.expr})` });
+            const bdiva = div(b.val, a.val); if (bdiva) candidates.push({ val: bdiva, expr: `(${b.expr} / ${a.expr})` });
+
+            for (const cand of candidates) {
+              const res = recurse([...rest, cand]);
+              if (res) return res; // early exit on first solution
+            }
+          }
+        }
+        return null;
+      }
+      return recurse(items);
+    }
+
+    // --- Generator: draws 4 numbers until solvable ---
+    function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function generateSolvable(min = 1, max = 13, maxAttempts = 5000) {
+      for (let tries = 0; tries < maxAttempts; tries++) {
+        const hand = [randomInt(min, max), randomInt(min, max), randomInt(min, max), randomInt(min, max)];
+        const sol = solveMake24(hand);
+        if (sol) return { hand, solution: sol };
+      }
+      return null; // extremely unlikely with typical ranges
+    }
+
+    // --- UI wiring ---
+    const cardsEl = document.getElementById('cards');
+    const solutionEl = document.getElementById('solution');
+    const newBtn = document.getElementById('newGameBtn');
+    const ansBtn = document.getElementById('showAnswerBtn');
+    const minInput = document.getElementById('minInput');
+    const maxInput = document.getElementById('maxInput');
+
+    let current = { hand: [], solution: null };
+
+    function renderHand(hand) {
+      cardsEl.innerHTML = '';
+      hand.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.textContent = n;
+        cardsEl.appendChild(el);
+      });
+    }
+
+    function sanitizeRange() {
+      let min = parseInt(minInput.value, 10);
+      let max = parseInt(maxInput.value, 10);
+      if (!Number.isFinite(min)) min = 1;
+      if (!Number.isFinite(max)) max = 13;
+      if (min < 1) min = 1;
+      if (max < min) max = min;
+      minInput.value = String(min);
+      maxInput.value = String(max);
+      return { min, max };
+    }
+
+    function newGame() {
+      ansBtn.disabled = true;
+      solutionEl.style.display = 'none';
+      solutionEl.textContent = '';
+      const { min, max } = sanitizeRange();
+
+      // Allow the UI to stay responsive during search for a solvable hand
+      setTimeout(() => {
+        const out = generateSolvable(min, max, 10000);
+        if (!out) {
+          cardsEl.innerHTML = '';
+          solutionEl.style.display = 'block';
+          solutionEl.textContent = `No solvable hand found in ${min}..${max}. Try widening the range.`;
+          ansBtn.disabled = true;
+          current = { hand: [], solution: null };
+          return;
+        }
+        current = out;
+        renderHand(out.hand);
+        ansBtn.disabled = false;
+      }, 0);
+    }
+
+    function showAnswer() {
+      if (!current.solution) return;
+      solutionEl.style.display = 'block';
+      solutionEl.textContent = `${current.solution} = 24`;
+    }
+
+    newBtn.addEventListener('click', newGame);
+    ansBtn.addEventListener('click', showAnswer);
+    minInput.addEventListener('change', () => { /* keep values sane */ sanitizeRange(); });
+    maxInput.addEventListener('change', () => { /* keep values sane */ sanitizeRange(); });
+
+    // First game on load
+    newGame();
+  </script>
+</body>
+</html>
